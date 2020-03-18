@@ -2,7 +2,7 @@
 
 This code is a simplified version of the open source code from "[Macroeconomic Nowcasting and Forecasting with Big Data](https://www.newyorkfed.org/research/staff_reports/sr830.html)" by Brandyn Bok, Daniele Caratelli, Domenico Giannone, Argia M. Sbordone, and Andrea Tambalotti, *Staff Reports 830*, Federal Reserve Bank of New York (prepared for Volume 10 of the *Annual Review of Economics*).
 
-**Note:** This simplified code is written so that it should be easy to follow and implement. These simplification comes at the expense of removing data blocks (i.e. global, soft, real, labor) and AR(1) terms for each input series. These modifications were implemented by Seth Leonard and are not associated with the Federal Reserve Bank of New York.
+**Note:** This simplified code is written so that it should be easy to follow and implement. These simplifications comes at the expense of removing data blocks (i.e. global, soft, real, labor) and AR(1) terms for each input series. **These modifications were implemented by Seth Leonard and are not associated with the Federal Reserve Bank of New York or any of its staff.**
 
 
 ## Download instructions

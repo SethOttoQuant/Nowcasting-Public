@@ -62,7 +62,16 @@ function  [C_new, R_new, A_new, Q_new, Z_0, V_0, loglik] = EMstep(Y, A, C, Q, R,
 [k,r] = size(C);
 m = size(Z_0,1); 
 sA = m-nobs;
+pp = sA/r;
 ar_start = sA+1;
+
+%% Normalize
+
+scl = kron(eye(pp),eye(r)/chol(Q(1:r,1:r),'lower')); 
+Iscl = kron(eye(pp),chol(Q(1:r,1:r),'lower'));
+Q(1:r,1:r) = eye(r); %due to normalization
+A(1:sA,1:sA) = scl*A(1:sA,1:sA)*Iscl;
+CJ = get_CJ(C, frq, isdiff, p)*Iscl;
 
 %% ESTIMATION STEP: Compute the (expected) sufficient statistics for a single Kalman filter sequence
 
@@ -70,16 +79,13 @@ ar_start = sA+1;
 % Note that log-liklihood is NOT re-estimated after the runKF step: This
 % effectively gives the previous iteration's log-likelihood
 % For more information on output, see runKF
-CJ = get_CJ(C, frq, isdiff, p);
 CC = [CJ, eye(nobs)];
 [Zsmooth, Vsmooth, VVsmooth, loglik] = runKF(Y, A, CC, Q, diag(R), Z_0, V_0, r);
 % Vsmooth gives the variance of contemporaneous factors
 % VVsmooth gives the covariance of factors at one lag for Watson Engle
 % adjustments
 
-% Scale to avoid exploding factors
-Wz = 10./std(Zsmooth(1:sA,:),1,2);
-Zsmooth(1:sA,:) = Zsmooth(1:sA,:).*repmat(Wz,1,T+1);
+% Zsmooth(1:sA,:)*Zsmooth(1:sA,:)'/T
 
 %% MAXIMIZATION STEP (TRANSITION EQUATION)
 % See (Banbura & Modugno, 2010) for details.
@@ -94,15 +100,15 @@ rp = r*p;
 
 % E[f_t*f_t' | Omega_T]
 EZZ = Zsmooth(1:rp, 2:end) * Zsmooth(1:rp, 2:end)'...
-    +diag(Wz(1:rp))*sum(Vsmooth(1:rp, 1:rp, 2:end) ,3)*diag(Wz(1:rp)); % WE adjustment
+    + sum(Vsmooth(1:rp, 1:rp, 2:end) ,3); % WE adjustment
 
 % E[f_{t-1}*f_{t-1}' | Omega_T]
 EZZ_BB = Zsmooth(1:rp, 1:end-1)*Zsmooth(1:rp, 1:end-1)'...
-        +diag(Wz(1:rp))*sum(Vsmooth(1:rp, 1:rp, 1:end-1), 3)*diag(Wz(1:rp)); % WE adjustment
+        + sum(Vsmooth(1:rp, 1:rp, 1:end-1), 3); % WE adjustment
 
 % E[f_t*f_{t-1}' | Omega_T]
 EZZ_FB = Zsmooth(1:r, 2:end)*Zsmooth(1:rp, 1:end-1)'...
-    +diag(Wz(1:r))*sum(VVsmooth(1:r, 1:rp, :), 3)*diag(Wz(1:rp)); % WE adjustment
+    + sum(VVsmooth(1:r, 1:rp, :), 3); % WE adjustment
 
 % Equation 6: Estimate VAR(p) for factor
 A_new(1:r,1:rp) = EZZ_FB/EZZ_BB; % VAR coeficients
@@ -148,12 +154,12 @@ for j = 1:k % Loop through observables
     if fq==1
         Z_obs = Zsmooth(1:r,2:end); %drop pre sample value Z_0
         Z_obs = Z_obs(:,y_idx); %Z_obs where y observed
-        V_obs = diag(Wz(1:r))*sum(Vsmooth(1:r,1:r,logical([0,y_idx])),3)*diag(Wz(1:r)); %Vsmooth where y observed
+        V_obs = sum(Vsmooth(1:r,1:r,logical([0,y_idx])),3); %Vsmooth where y observed
     else
         J = helper_mat(fq,isdiff(j),r,sA);
         Z_obs = J*Zsmooth(1:sA,2:end);
         Z_obs = Z_obs(:,y_idx);
-        V_obs = J*diag(Wz(1:sA))*sum(Vsmooth(1:sA,1:sA,logical([0,y_idx])),3)*diag(Wz(1:sA))*J';
+        V_obs = J*sum(Vsmooth(1:sA,1:sA,logical([0,y_idx])),3)*J';
     end
     V_ar = sum(Vsmooth(sA+j,sA+j,logical([0,y_idx])),3); %WE adjustment for AR(1) error term
     EZZ = Z_obs*Z_obs' + V_obs;

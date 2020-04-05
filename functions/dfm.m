@@ -66,7 +66,7 @@ frq = set_frequencies(Spec.Frequency);
 isdiff = is_diff(Spec.Transformation);
 
 if(nargin < 3)
-    threshold = 1e-5;  % EM loop threshold (default value)
+    threshold = 1e-4;  % EM loop threshold (default value)
 end
 
 %% Prepare data -----------------------------------------------------------

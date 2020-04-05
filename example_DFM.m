@@ -59,7 +59,7 @@ pause(1); % to display plot
 
 
 %% Run dynamic factor model (DFM) and save estimation output as 'ResDFM'.
-threshold = 1e-4; % Set to 1e-5 for more robust estimates
+threshold = 1e-5; % Set to 1e-5 for more robust estimates
 
 % Orignially model parameters were hard coded. In this version they are
 % entered below.
@@ -90,8 +90,7 @@ disp(helper_mat(3,true,2,10))
 Res = dfm(X,Spec,threshold); %Estimate the model
 save('ResDFM','Res','Spec');
 
-
-plot(Time,Res.Z(:,1:Spec.r));
+%plot(Time,Res.Z(:,1:Spec.r));
 
 %% Plot common factor and standardized data.
 idxSeries = strcmp('INDPRO',SeriesID);

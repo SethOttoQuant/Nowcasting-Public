@@ -138,6 +138,8 @@ end
 
 % Final run of the Kalman filter
 % Normalize
+sA = (size(Z_0,1) - N);
+pp = sA/r;
 chlky = chol(Q(1:r,1:r),'lower');
 scl = kron(eye(pp),eye(r)/chlky); 
 Iscl = kron(eye(pp),chlky);

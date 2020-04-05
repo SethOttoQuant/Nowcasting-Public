@@ -8,8 +8,15 @@ This code is a simplified version of the open source code from "[Macroeconomic N
 
 There are two branches on this repo. 'master' contains the basic code ommiting AR(1) error terms for each input series. If you want to understand how models are estimated, this is the place to start. 'AR1_errors' includes autoregressive errors for each data series. It therefore has a slightly longer run time and the code is more complicated. 
 
-In the original NY Fed Nowcasting code, identification came from using data blocks. In both versions of this code, identification is based on orthogonal shocks to factors. Because this code does not use blocks, models are in fact less restricted. 
+In the original NY Fed Nowcasting code, identification came from using data blocks. In both versions of this code, identification is based on orthogonal shocks to factors. Because this code does not use blocks, models are in fact less restricted.
 
+This code accepts the following frequencies:
+ - 'd' daily
+ - 'w' weekly
+ - 'bw' every other week
+ - 'm' monthly
+ - 'q' quarterly
+ - 'y' yearly
 
 ## Download instructions
 

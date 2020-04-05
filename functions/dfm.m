@@ -137,9 +137,16 @@ else
 end
 
 % Final run of the Kalman filter
+% Normalize
+chlky = chol(Q(1:r,1:r),'lower');
+scl = kron(eye(pp),eye(r)/chlky); 
+Iscl = kron(eye(pp),chlky);
+Q(1:r,1:r) = eye(r); %due to normalization
+A(1:sA,1:sA) = scl*A(1:sA,1:sA)*Iscl;
+C = C*chlky;
+% Run filter/smoother
 CJ = [get_CJ(C,frq,isdiff,p), eye(N)];
 Zsmooth = runKF(Y, A, CJ, Q, diag(R), Z_0, V_0, r)';
-
 x_sm = Zsmooth(2:end,:) * CJ';  % Get smoothed X
 
 %%  Loading the structure with the results --------------------------------

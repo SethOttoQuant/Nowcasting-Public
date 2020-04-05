@@ -66,12 +66,12 @@ pp = sA/r;
 ar_start = sA+1;
 
 %% Normalize
-
-scl = kron(eye(pp),eye(r)/chol(Q(1:r,1:r),'lower')); 
-Iscl = kron(eye(pp),chol(Q(1:r,1:r),'lower'));
+chlky = chol(Q(1:r,1:r),'lower');
+scl = kron(eye(pp),eye(r)/chlky); 
+Iscl = kron(eye(pp),chlky);
 Q(1:r,1:r) = eye(r); %due to normalization
 A(1:sA,1:sA) = scl*A(1:sA,1:sA)*Iscl;
-CJ = get_CJ(C, frq, isdiff, p)*Iscl;
+C = C*chlky;
 
 %% ESTIMATION STEP: Compute the (expected) sufficient statistics for a single Kalman filter sequence
 
@@ -79,6 +79,7 @@ CJ = get_CJ(C, frq, isdiff, p)*Iscl;
 % Note that log-liklihood is NOT re-estimated after the runKF step: This
 % effectively gives the previous iteration's log-likelihood
 % For more information on output, see runKF
+CJ =get_CJ(C, frq, isdiff, p); 
 CC = [CJ, eye(nobs)];
 [Zsmooth, Vsmooth, VVsmooth, loglik] = runKF(Y, A, CC, Q, diag(R), Z_0, V_0, r);
 % Vsmooth gives the variance of contemporaneous factors

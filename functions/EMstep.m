@@ -61,6 +61,14 @@ function  [C_new, R_new, A_new, Q_new, Z_0, V_0, loglik] = EMstep(Y, A, C, Q, R,
 [~, T] = size(Y);
 [k,r] = size(C);
 m = size(Z_0,1); 
+pp = m/r;
+
+chlky = chol(Q(1:r,1:r),'lower');
+scl = kron(eye(pp),eye(r)/chlky); 
+Iscl = kron(eye(pp),chlky);
+Q(1:r,1:r) = eye(r); %due to normalization
+A = scl*A*Iscl;
+C = C*chlky;
 
 %% ESTIMATION STEP: Compute the (expected) sufficient statistics for a single Kalman filter sequence
 

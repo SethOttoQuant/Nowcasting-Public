@@ -59,7 +59,7 @@ end
 
 fprintf('Estimating the dynamic factor model (DFM) ... \n\n');
 
-[T,N] = size(X);
+[T,~] = size(X);
 r = Par.r; %number of factors
 p = Par.p;
 frq = set_frequencies(Spec.Frequency);
@@ -68,8 +68,6 @@ isdiff = is_diff(Spec.Transformation);
 if(nargin < 3)
     threshold = 1e-5;  % EM loop threshold (default value)
 end
-
-max_iter = 5000;  % EM loop maximum number of iterations
 
 %% Prepare data -----------------------------------------------------------
 Mx = mean(X,'omitnan');
@@ -139,6 +137,15 @@ else
 end
 
 % Final run of the Kalman filter
+%Normalization
+m = size(Z_0,1); 
+pp = m/r;
+chlky = chol(Q(1:r,1:r),'lower');
+scl = kron(eye(pp),eye(r)/chlky); 
+Iscl = kron(eye(pp),chlky);
+Q(1:r,1:r) = eye(r); %due to normalization
+A = scl*A*Iscl;
+C = C*chlky;
 CJ = get_CJ(C,frq,isdiff,p);
 Zsmooth = runKF(Y, A, CJ, Q, diag(R), Z_0, V_0, r)';
 

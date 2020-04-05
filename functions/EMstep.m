@@ -2,7 +2,7 @@
 %% PROCEDURES -------------------------------------------------------------
 % Note: Kalman filter (runKF()) is in the 'functions' folder
 
-function  [C_new, R_new, A_new, Q_new, Z_0, V_0, loglik] = EMstep(Y, A, C, Q, R, Z_0, V_0, p, frq, is_diff)
+function  [C_new, R_new, A_new, Q_new, Z_0, V_0, loglik] = EMstep(Y, A, C, Q, R, Z_0, V_0, p, frq, isdiff)
 %EMstep    Applies EM algorithm for parameter reestimation
 %
 %  Syntax:
@@ -58,9 +58,11 @@ function  [C_new, R_new, A_new, Q_new, Z_0, V_0, loglik] = EMstep(Y, A, C, Q, R,
 %% Initialize preliminary values
 
 % Store series/model values
-[~, T] = size(Y);
+[nobs, T] = size(Y);
 [k,r] = size(C);
 m = size(Z_0,1); 
+sA = m-nobs;
+ar_start = sA+1;
 
 %% ESTIMATION STEP: Compute the (expected) sufficient statistics for a single Kalman filter sequence
 
@@ -68,44 +70,68 @@ m = size(Z_0,1);
 % Note that log-liklihood is NOT re-estimated after the runKF step: This
 % effectively gives the previous iteration's log-likelihood
 % For more information on output, see runKF
-CJ = get_CJ(C, frq, is_diff, p);
-[Zsmooth, Vsmooth, VVsmooth, loglik] = runKF(Y, A, CJ, Q, diag(R), Z_0, V_0, r);
+CJ = get_CJ(C, frq, isdiff, p);
+CC = [CJ, eye(nobs)];
+[Zsmooth, Vsmooth, VVsmooth, loglik] = runKF(Y, A, CC, Q, diag(R), Z_0, V_0, r);
 % Vsmooth gives the variance of contemporaneous factors
 % VVsmooth gives the covariance of factors at one lag for Watson Engle
 % adjustments
+
+% Scale to avoid exploding factors
+Wz = 10./std(Zsmooth(1:sA,:),1,2);
+Zsmooth(1:sA,:) = Zsmooth(1:sA,:).*repmat(Wz,1,T+1);
 
 %% MAXIMIZATION STEP (TRANSITION EQUATION)
 % See (Banbura & Modugno, 2010) for details.
 
 %%% 2A. UPDATE FACTOR PARAMETERS  ----------------------------
-
+% Initialize output
+A_new = A;
+Q_new = Q;
 rp = r*p;
 % ESTIMATE FACTOR PORTION OF Q, A
 % Note: EZZ, EZZ_BB, EZZ_FB are parts of equations 6 and 8 in BM 2010
 
 % E[f_t*f_t' | Omega_T]
 EZZ = Zsmooth(1:rp, 2:end) * Zsmooth(1:rp, 2:end)'...
-    +sum(Vsmooth(1:rp, 1:rp, 2:end) ,3); % WE adjustment
+    +diag(Wz(1:rp))*sum(Vsmooth(1:rp, 1:rp, 2:end) ,3)*diag(Wz(1:rp)); % WE adjustment
 
 % E[f_{t-1}*f_{t-1}' | Omega_T]
 EZZ_BB = Zsmooth(1:rp, 1:end-1)*Zsmooth(1:rp, 1:end-1)'...
-        +sum(Vsmooth(1:rp, 1:rp, 1:end-1), 3); % WE adjustment
+        +diag(Wz(1:rp))*sum(Vsmooth(1:rp, 1:rp, 1:end-1), 3)*diag(Wz(1:rp)); % WE adjustment
 
 % E[f_t*f_{t-1}' | Omega_T]
 EZZ_FB = Zsmooth(1:r, 2:end)*Zsmooth(1:rp, 1:end-1)'...
-    +sum(VVsmooth(1:r, 1:rp, :), 3); % WE adjustment
+    +diag(Wz(1:r))*sum(VVsmooth(1:r, 1:rp, :), 3)*diag(Wz(1:rp)); % WE adjustment
 
 % Equation 6: Estimate VAR(p) for factor
-A(1:r,1:rp) = EZZ_FB/EZZ_BB; % AR coeficients
+A_new(1:r,1:rp) = EZZ_FB/EZZ_BB; % VAR coeficients
 
 % Equation 8: Covariance matrix of residuals of VAR
-Q(1:r,1:r) = (EZZ(1:r,1:r) - A(1:r,1:rp)* EZZ_FB') / T; %shortcut --- very clever (again)
+Q_new(1:r,1:r) = (EZZ(1:r,1:r) - A_new(1:r,1:rp)* EZZ_FB') / T; %shortcut --- very clever (again)
+
+%%% Update AR(1) components
+% Below 3 estimate the idiosyncratic component (for eqns 6, 8 BM 2010)
+% Just a bunch of AR(1) regressions
+
+% E[f_t*f_t' | \Omega_T]
+EZZ = diag(diag(Zsmooth(ar_start:end, 2:end) * Zsmooth(ar_start:end, 2:end)'))...
+    + diag(diag(sum(Vsmooth(ar_start:end, ar_start:end, 2:end), 3)));
+
+% E[f_{t-1}*f_{t-1}' | \Omega_T]
+EZZ_BB = diag(diag(Zsmooth(ar_start:end, 1:end-1)* Zsmooth(ar_start:end, 1:end-1)'))...
+       + diag(diag(sum(Vsmooth(ar_start:end, ar_start:end, 1:end-1), 3)));
+
+% E[f_t*f_{t-1}' | \Omega_T]
+EZZ_FB = diag(diag(Zsmooth(ar_start:end, 2:end)*Zsmooth(ar_start:end, 1:end-1)'))...
+       + diag(diag(sum(VVsmooth(ar_start:end, ar_start:end, :), 3)));
+
+A_new(ar_start:end, ar_start:end) = EZZ_FB * diag(1./diag((EZZ_BB)));  % Equation 6
+Q_new(ar_start:end, ar_start:end) = (EZZ - A(ar_start:end, ar_start:end)*EZZ_FB') / T;           % Equation 8
 
 Z_0 = Zsmooth(:,1); %zeros(size(Zsmooth,1),1); %update initial condition
 V_0 = squeeze(Vsmooth(:,:,1));
-% Initialize output
-A_new = A;
-Q_new = Q;
+
 
 %% 3 MAXIMIZATION STEP (observation equation)
 
@@ -116,22 +142,23 @@ C_new = C;
 
 for j = 1:k % Loop through observables
     fq = frq(j);
-    y = Y(j,:);
+    y = Y(j,:) - Zsmooth(sA+j,2:end);
     y_idx = ~isnan(y);
     y_obs = y(y_idx);
     if fq==1
         Z_obs = Zsmooth(1:r,2:end); %drop pre sample value Z_0
-        Z_obs = Z_obs(:,y_idx);
-        V_obs = sum(Vsmooth(1:r,1:r,logical([0,y_idx])),3);
+        Z_obs = Z_obs(:,y_idx); %Z_obs where y observed
+        V_obs = diag(Wz(1:r))*sum(Vsmooth(1:r,1:r,logical([0,y_idx])),3)*diag(Wz(1:r)); %Vsmooth where y observed
     else
-        J = helper_mat(fq,is_diff(j),r,m);
-        Z_obs = J*Zsmooth(:,2:end);
+        J = helper_mat(fq,isdiff(j),r,sA);
+        Z_obs = J*Zsmooth(1:sA,2:end);
         Z_obs = Z_obs(:,y_idx);
-        V_obs = J*sum(Vsmooth(:,:,logical([0,y_idx])),3)*J';
+        V_obs = J*diag(Wz(1:sA))*sum(Vsmooth(1:sA,1:sA,logical([0,y_idx])),3)*diag(Wz(1:sA))*J';
     end
+    V_ar = sum(Vsmooth(sA+j,sA+j,logical([0,y_idx])),3); %WE adjustment for AR(1) error term
     EZZ = Z_obs*Z_obs' + V_obs;
     C_new(j,:) = (y_obs*Z_obs')/ EZZ;
-    R(j) = ((y_obs-C_new(j,:)*Z_obs)*(y_obs-C_new(j,:)*Z_obs)' + C_new(j,:)*V_obs*C_new(j,:)')/size(y_obs,2);
+    R(j) = ((y_obs-C_new(j,:)*Z_obs)*(y_obs-C_new(j,:)*Z_obs)' + C_new(j,:)*V_obs*C_new(j,:)' + V_ar)/size(y_obs,2);
 end
 R_new = R;
 

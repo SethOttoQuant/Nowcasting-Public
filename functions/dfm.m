@@ -69,8 +69,6 @@ if(nargin < 3)
     threshold = 1e-5;  % EM loop threshold (default value)
 end
 
-max_iter = 5000;  % EM loop maximum number of iterations
-
 %% Prepare data -----------------------------------------------------------
 Mx = mean(X,'omitnan');
 Wx = std(X,'omitnan');
@@ -139,14 +137,14 @@ else
 end
 
 % Final run of the Kalman filter
-CJ = get_CJ(C,frq,isdiff,p);
+CJ = [get_CJ(C,frq,isdiff,p), eye(N)];
 Zsmooth = runKF(Y, A, CJ, Q, diag(R), Z_0, V_0, r)';
 
 x_sm = Zsmooth(2:end,:) * CJ';  % Get smoothed X
 
 %%  Loading the structure with the results --------------------------------
 Res.x_sm = x_sm;
-Res.X_sm = repmat(Wx,T,1) .* x_sm + repmat(Mx,T,1);  % Unstandardized, smoothed
+Res.X_sm = 10*repmat(Wx,T,1).*x_sm + repmat(Mx,T,1);  % Unstandardized, smoothed
 Res.Z = Zsmooth(2:end,:);
 Res.C = C;
 Res.CJ = CJ;

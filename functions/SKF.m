@@ -32,7 +32,7 @@ function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
   
 %% INITIALIZE OUTPUT VALUES ---------------------------------------------
   % Output structure & dimensions of state space matrix
-  m = size(C,2);
+  m = size(A,2);
   
   % Outputs time for data matrix. "number of observations"
   [k,nobs]  = size(Y);

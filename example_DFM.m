@@ -3,8 +3,8 @@
 % This is a simplified version of the New York Fed Nowcasting Code on
 % [Github](https://github.com/FRBNY-TimeSeriesAnalysis/Nowcasting).
 % This version does not include blocks for data types (i.e. global, soft,
-% real, labor) or AR(1) components for series, thought the latter can be
-% easily added back in. It also accepts a wider range of frequency mixes,
+% real, labor) but does include AR(1) components for series.
+% It also accepts a wider range of frequency mixes,
 % accepting inputs y, q, m, bw, w, d. Key differences are highlighted
 % below. This file both estimates the model and calculates the
 % "News" component of revised and new data between 2016-12-16 and
@@ -59,7 +59,7 @@ pause(1); % to display plot
 
 
 %% Run dynamic factor model (DFM) and save estimation output as 'ResDFM'.
-threshold = 1e-5; % Set to 1e-5 for more robust estimates
+threshold = 1e-4; % Set to 1e-5 for more robust estimates
 
 % Orignially model parameters were hard coded. In this version they are
 % entered below.
@@ -90,6 +90,8 @@ disp(helper_mat(3,true,2,10))
 Res = dfm(X,Spec,threshold); %Estimate the model
 save('ResDFM','Res','Spec');
 
+
+plot(Time,Res.Z(:,1:Spec.r));
 
 %% Plot common factor and standardized data.
 idxSeries = strcmp('INDPRO',SeriesID);

@@ -83,7 +83,7 @@ function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
           iF  = pinv(C_t * VC + R_t); %variance of observables
           
           % Matrix of population regression coefficients (QuantEcon eqn #4)
-          VCF = VC*iF;  
+          VCF = VC*iF;  %Kalman gain K
 
           % Gives difference between actual and predicted observation
           % matrix values

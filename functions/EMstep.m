@@ -59,7 +59,7 @@ function  [C_new, R_new, A_new, Q_new, Z_0, V_0, loglik] = EMstep(Y, A, C, Q, R,
 
 % Store series/model values
 [nobs, T] = size(Y);
-[k,r] = size(C);
+[~,r] = size(C);
 m = size(Z_0,1); 
 sA = m-nobs;
 pp = sA/r;
@@ -134,7 +134,7 @@ EZZ_FB = diag(diag(Zsmooth(ar_start:end, 2:end)*Zsmooth(ar_start:end, 1:end-1)')
        + diag(diag(sum(VVsmooth(ar_start:end, ar_start:end, :), 3)));
 
 A_new(ar_start:end, ar_start:end) = EZZ_FB * diag(1./diag((EZZ_BB)));  % Equation 6
-Q_new(ar_start:end, ar_start:end) = (EZZ - A(ar_start:end, ar_start:end)*EZZ_FB') / T;           % Equation 8
+Q_new(ar_start:end, ar_start:end) = (EZZ - A_new(ar_start:end, ar_start:end)*EZZ_FB') / T;           % Equation 8
 
 Z_0 = Zsmooth(:,1); %zeros(size(Zsmooth,1),1); %update initial condition
 V_0 = squeeze(Vsmooth(:,:,1));
@@ -147,7 +147,7 @@ V_0 = squeeze(Vsmooth(:,:,1));
 % LOADINGS
 C_new = C;
 
-for j = 1:k % Loop through observables
+for j = 1:nobs % Loop through observables
     fq = frq(j);
     y = Y(j,:) - Zsmooth(sA+j,2:end);
     y_idx = ~isnan(y);

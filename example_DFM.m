@@ -43,19 +43,7 @@ datafile = fullfile('data',country,[vintage '.xls']);
 summarize(X,Time,Spec,vintage); % summarize data
 
 
-%% Plot raw and transformed data.
-% Industrial Production (INDPRO) <fred.stlouisfed.org/series/INDPRO>
-idxSeries = strcmp('INDPRO',SeriesID); t_obs = ~isnan(X(:,idxSeries));
-figure('Name',['Data - ' SeriesName{idxSeries}]);
 
-subplot(2,1,1); box on;
-plot(Time(t_obs),Z(t_obs,idxSeries)); title('raw observed data');
-ylabel(Units{idxSeries}); xlim(Time([1 end])); datetick('x','yyyy','keeplimits');
-
-subplot(2,1,2); box on;
-plot(Time(t_obs),X(t_obs,idxSeries)); title('transformed data');
-ylabel(UnitsTransformed{idxSeries}); xlim(Time([1 end])); datetick('x','yyyy','keeplimits');
-pause(1); % to display plot
 
 
 %% Run dynamic factor model (DFM) and save estimation output as 'ResDFM'.
@@ -75,7 +63,7 @@ Spec.r = 3; %number of factors (no blocks here)
 % Mariano Murasawa (2003). For example, for a differenced quarterly series
 % and a two factor model where data is either monthly or quarterly (so that
 % the transition equation is quarterly) we have
-disp(helper_mat(3,true,2,10))
+% disp(helper_mat(3,true,2,10))
 % This matrix is generated automatically using 
 %     - frq: the number of high frequency periods in each series. For
 %     monthly-quarterly data, a monthly series will be labled 1 and a
@@ -107,7 +95,7 @@ idxSeries = strcmp('PAYEMS',SeriesID); t_obs = ~isnan(X(:,idxSeries));
 figure('Name','Common Factor Projection');
 
 subplot(2,1,1); % projection of common factor onto PAYEMS
-CommonFactor = Res.CJ(idxSeries,:)*Res.Z'*Res.Wx(idxSeries)+Res.Mx(idxSeries);
+CommonFactor = Res.X_sm(:,idxSeries);
 plot(Time,CommonFactor,'k'); hold on;
 plot(Time(t_obs),X(t_obs,idxSeries),'b'); box on;
 title(SeriesName{idxSeries}); xlim(Time([1 end])); datetick('x','yyyy','keeplimits');
@@ -116,7 +104,7 @@ legend('common component','data'); legend boxoff;
 
 subplot(2,1,2); % projection of common factor onto GDPC1
 idxSeries = strcmp('GDPC1',SeriesID); t_obs = ~isnan(X(:,idxSeries));
-CommonFactor = Res.CJ(idxSeries,:)*Res.Z'*Res.Wx(idxSeries)+Res.Mx(idxSeries);
+CommonFactor = Res.X_sm(:,idxSeries);
 plot(Time,CommonFactor,'k'); hold on;
 plot(Time(t_obs), X(t_obs,idxSeries),'b'); box on;
 title(SeriesName{idxSeries}); xlim(Time([1 end])); datetick('x','yyyy','keeplimits');

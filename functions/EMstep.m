@@ -66,10 +66,10 @@ pp = sA/r;
 ar_start = sA+1;
 
 %% Normalize
-chlky = chol(Q(1:r,1:r),'lower');
+chlky = chol(Q(1:r,1:r),'lower')/sqrt(10);
 scl = kron(eye(pp),eye(r)/chlky); 
 Iscl = kron(eye(pp),chlky);
-Q(1:r,1:r) = eye(r); %due to normalization
+Q(1:r,1:r) = 10*eye(r); %due to normalization
 A(1:sA,1:sA) = scl*A(1:sA,1:sA)*Iscl;
 C = C*chlky;
 

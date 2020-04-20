@@ -72,7 +72,7 @@ end
 %% Prepare data -----------------------------------------------------------
 Mx = mean(X,'omitnan');
 Wx = std(X,'omitnan');
-xNaN = (X-repmat(Mx,T,1))./repmat(Wx,T,1);  % Standardize series, ie scale()
+xNaN = 10*(X-repmat(Mx,T,1))./repmat(Wx,T,1);  % Standardize series, ie scale()
 
 %% Initial Conditions -----------------------------------------------------
 
@@ -105,7 +105,7 @@ Y = xNaN'; %transpose for faster column-wise access
 
 while (num_iter < max_iter) && ~converged % Loop until converges or max iter.
 
-    [C_new, R_new, A_new, Q_new, Z_0, V_0, loglik] = ...  % Applying EM algorithm
+    [C_new, R_new, A_new, Q_new, ~, ~, loglik] = ...  % Applying EM algorithm
         EMstep(Y, A, C, Q, R, Z_0, V_0, p, frq, isdiff);
 
     C = C_new;
@@ -140,10 +140,10 @@ end
 % Normalize
 sA = (size(Z_0,1) - N);
 pp = sA/r;
-chlky = chol(Q(1:r,1:r),'lower');
+chlky = chol(Q(1:r,1:r),'lower')/sqrt(10);
 scl = kron(eye(pp),eye(r)/chlky); 
 Iscl = kron(eye(pp),chlky);
-Q(1:r,1:r) = eye(r); %due to normalization
+Q(1:r,1:r) = 10*eye(r); %due to normalization
 A(1:sA,1:sA) = scl*A(1:sA,1:sA)*Iscl;
 C = C*chlky;
 % Run filter/smoother
@@ -153,7 +153,7 @@ x_sm = Zsmooth(2:end,:) * CJ';  % Get smoothed X
 
 %%  Loading the structure with the results --------------------------------
 Res.x_sm = x_sm;
-Res.X_sm = 10*repmat(Wx,T,1).*x_sm + repmat(Mx,T,1);  % Unstandardized, smoothed
+Res.X_sm = repmat(Wx,T,1).*x_sm/10 + repmat(Mx,T,1);  % Unstandardized, smoothed
 Res.Z = Zsmooth(2:end,:);
 Res.C = C;
 Res.CJ = CJ;

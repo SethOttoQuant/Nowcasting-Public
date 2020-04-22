@@ -24,14 +24,15 @@
 
 function [ A, C, Q, R, V_0] = InitCond(x,r,p,optNaN,frq,isdiff)
 
-OPTS.disp=0;  % Turns off diagnostic information for eigenvalue computation
+% OPTS.disp=0;  % Turns off diagnostic information for eigenvalue computation
 [xBal,~] = remNaNs_spline(x,optNaN);  % Spline without NaNs
 
 [T,n] = size(xBal);  % Time T series number n
 [C, ~] = eigs(cov(xBal), r, 'lm'); % Initial guess for loadings
 z = xBal*C; % Initial guess for factors
 Z = stack_obs(z,p,true);
-B = (z(p+1:T,:)'*Z)/(Z'*Z); %transition matrix
+sV = size(Z,2);
+B = (z(p+1:T,:)'*Z)/(Z'*Z + T*eye(sV)); %transition matrix
 E = z(p+1:T,:)-Z*B';
 %Adjusting for differenced low frequency data
 lags = frq;

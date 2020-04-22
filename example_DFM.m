@@ -6,9 +6,7 @@
 % real, labor) but does include AR(1) components for series.
 % It also accepts a wider range of frequency mixes,
 % accepting inputs y, q, m, bw, w, d. Key differences are highlighted
-% below. This file both estimates the model and calculates the
-% "News" component of revised and new data between 2016-12-16 and
-% 2016-12-23.
+% below.
 %
 % Note: data must already be correctly formatted and dated. For example,
 % for monthly quarterly data, quarterly observations must be refference
@@ -19,45 +17,44 @@
 %% Clear workspace and set paths.
 close all; clear; clc;
 addpath('functions');
+addpath('data')
 
+%% Read data and structure
+% Required parameters are:
+% Spec.p         number of lags
+% Spec.m         number of factors
+% Spec.isdiff    logical (T/F) indicating whether input data was differenced
+% Optional parameters are:
+% Spec.colnames  names of columns in data
+% Spec.A         Previously estimated transition matrix
+% Spec.Q         Previously estimated covar of shocks to factors
+% Spec.H         Previously estimated loadings (observation equation)
+% Spec.HJ        Previously estimated loadings in mixed frequency format 
+% Spec.R         Previously estimated shocks to observations
 
-%% User inputs.
-vintage = '2016-12-16'; % vintage dataset to use for estimation
-country = 'US';         % United States macroeconomic data
-sample_start  = datenum('2000-01-01','yyyy-mm-dd'); % estimation sample
+fname = 'model.json';
+Spec = jsondecode(fileread(fname));
 
+% Read data
 
-%% Load model specification and dataset.
-% Load model specification structure `Spec`. Note the Spec file has not
-% changed from the original NY Fed example, but some inputs are not used. 
-Spec = load_spec('Spec_US_example.xls');
-% Parse `Spec`
-SeriesID = Spec.SeriesID; SeriesName = Spec.SeriesName; Units = Spec.Units; UnitsTransformed = Spec.UnitsTransformed;
-% Load data
-datafile = fullfile('data',country,[vintage '.xls']);
-[X,Time,Z] = load_data(datafile,Spec,sample_start); 
-%X - transformed data
-%Time - time in Matlab format
-%datestr(Time)
-%Z - raw data
-summarize(X,Time,Spec,vintage); % summarize data
+% Data to estimate the model excludes outliers. However, predictions are
+% made with data that includes outliers; it is then up to the data
+% scientist how to treat extreme values
 
-
-
-
+% If the first row does not have any observations Matlab drops it. We need 
+% prevent this behavior so that rows correspond to dates.
+opts = delimitedTextImportOptions;
+opts.DataLines = 1;
+opts.VariableTypes = 'double';
+X = readmatrix('estimation_data_no_outliers.csv', opts);
+X_pred = readmatrix('prediction_data_with_outliers.csv', opts);
+dates = table2array(readtable('dates.csv'));
+datesM = datenum(dates); %dates in Matlab format
 
 %% Run dynamic factor model (DFM) and save estimation output as 'ResDFM'.
 threshold = 1e-5; % Set to 1e-5 for more robust estimates
 
-% Orignially model parameters were hard coded. In this version they are
-% entered below.
-% In this version they can be included in Spec, ie
-Spec.p = 3; %number of lags
-Spec.r = 3; %number of factors (no blocks here)
-% Other importnat elements of Spec:
-% Spec.Frequency
-
-% A key difference here is the use of the helper matrix J:
+% A key difference from the NY Fed code is the use of the helper matrix J:
 %
 % J is a helper matrix that performs the appropriate aggregation following
 % Mariano Murasawa (2003). For example, for a differenced quarterly series
@@ -75,19 +72,24 @@ Spec.r = 3; %number of factors (no blocks here)
 %     are differenced, the companion form of the model must have at least 15
 %     factors.  
 
-Res = dfm(X,Spec,threshold); %Estimate the model
+m = Spec.m;
+p = Spec.p;
+isdiff = logical(Spec.isdiff);
+frq = Spec.frq;
+
+% Arguments are entered explicity so users can change them easily
+Res = dfm(X, X_pred, m, p, frq, isdiff, threshold); %Estimate the model
 save('ResDFM','Res','Spec');
 
-%plot(Time,Res.Z(:,1:Spec.r));
-
-%% Plot common factor and standardized data.
-idxSeries = strcmp('INDPRO',SeriesID);
-figure('Name','Common Factor and Standardized Data');
-plot(Time,Res.x_sm,':'); hold on;
-h = plot(Time,Res.Z(:,1)*Res.C(idxSeries,1),'k','LineWidth',1.5); box on;
-xlim(Time([1 end])); datetick('x','yyyy','keeplimits');
-legend(h,'common factor'); legend boxoff;
+%% Plot Factors 
+figure('Name','Common Factors');
+h = plot(datesM,Res.Z(:,1:m));
+xlim(datesM([1 end])); datetick('x','yyyy','keeplimits');
 pause(5); % to display plot
+
+Spec.colnames
+
+%plot(datesM,Res.Z(:,1)*Res.H(idxSeries,1),'k','LineWidth',1.5)
 
 
 %% Plot projection of common factor onto Payroll Employment and GDP.
@@ -111,7 +113,9 @@ title(SeriesName{idxSeries}); xlim(Time([1 end])); datetick('x','yyyy','keeplimi
 ylabel({Units{idxSeries},UnitsTransformed{idxSeries}});
 legend('common component','data'); legend boxoff;
 
-%% Get Nowcast Update (simple)
+%% Get Nowcast Update for series 1 (example)
+
+
 
 new_vintage = '2016-12-23'; % vintage dataset to use for estimation
 new_datafile = fullfile('data',country,[new_vintage '.xls']);

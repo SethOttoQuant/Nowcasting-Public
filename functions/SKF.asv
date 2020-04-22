@@ -1,5 +1,5 @@
 %______________________________________________________________________
-function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
+function S = SKF(Y, A, HJ, Q, R_mat, Z_0, V_0)
 %SKF    Applies Kalman filter
 %
 %  Syntax:
@@ -16,6 +16,7 @@ function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
 %    R: k-by-k covariance for observation matrix residuals (e_t)
 %    Z_0: 1-by-m vector, initial value of state
 %    V_0: m-by-m matrix, initial value of state covariance matrix
+%    r: number of factors
 %
 %  Output parameters:
 %    S.Zm: m-by-nobs matrix, prior/predicted factor state vector
@@ -31,18 +32,18 @@ function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
   
 %% INITIALIZE OUTPUT VALUES ---------------------------------------------
   % Output structure & dimensions of state space matrix
-  m = size(C,2);
+  sA = size(A,2);
   
   % Outputs time for data matrix. "number of observations"
-  [nobs,k]  = size(Y);
+  [k,nobs]  = size(Y);
   
   % Instantiate output
-  S.Zm  = nan(m, nobs);       % Z_t | t-1 (prior)
-  S.Vm  = nan(m, m, nobs);    % V_t | t-1 (prior)
-  S.ZmU = nan(m, nobs+1);     % Z_t | t (posterior/updated)
-  S.VmU = nan(m, m, nobs+1);  % V_t | t (posterior/updated)
+  S.Zm  = nan(sA, nobs);       % Z_t | t-1 (prior)
+  S.Vm  = nan(sA, sA, nobs);    % V_t | t-1 (prior)
+  S.ZmU = nan(sA, nobs+1);     % Z_t | t (posterior/updated)
+  S.VmU = nan(sA, sA, nobs+1);  % V_t | t (posterior/updated)
   S.loglik = 0;
-  S.UD = zeros(k,nobs);
+  S.UD = zeros(sA,k,nobs);
 
 %% SET INITIAL VALUES ----------------------------------------------------
   Zu = Z_0;  % Z_0|0 (In below loop, Zu gives Z_t | t)
@@ -69,7 +70,7 @@ function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
       %%% CALCULATING POSTERIOR DISTRIBUTION ----------------------------
        
       % Removes missing series: These are removed from Y, C, and R
-      [Y_t, C_t, R_t, ~] = MissData(Y(:,t), C, R); 
+      [Y_t, C_t, R_t, ~] = MissData(Y(:,t), HJ, R_mat); 
 
       % Check if y_t contains no data. If so, replace Zu and Vu with prior.
       if isempty(Y_t)
@@ -82,7 +83,7 @@ function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
           iF  = pinv(C_t * VC + R_t); %variance of observables
           
           % Matrix of population regression coefficients (QuantEcon eqn #4)
-          VCF = VC*iF;  
+          VCF = VC*iF;  %Kalman gain K
 
           % Gives difference between actual and predicted observation
           % matrix values
@@ -96,7 +97,10 @@ function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
           Vu   =  0.5 * (Vu+Vu'); % Approximation trick to make symmetric
           
           % Update log likelihood 
-          S.loglik = S.loglik + 0.5*(log(det(iF))  - innov'*iF*innov);
+          S.loglik = S.loglik - (size(Y_t,1)*log(2*pi) + log(det(iF)) + innov'*iF*innov))/2;
+          
+          % Store Update Contribution for contemporanious factors
+          S.UD(:,isfinite(Y(:,t)),t) = VCF .* kron(ones(sA,1), innov');
       end
       
       %%% STORE OUTPUT----------------------------------------------------
@@ -109,12 +113,10 @@ function S = SKF(Y, A, C, Q, R, Z_0, V_0, r)
       % i.e. Zu = Z_t|t   & Vu = V_t|t
       S.ZmU(:,t+1)    = Zu;
       S.VmU(:,:,t+1)  = Vu;
-      % Store Update Contribution for contemporanious factors
-      S.UD(t,isfinite(Y(:,t))) = VCF(1:r,:)' .* kron(ones(1,r), innov);
   end 
   % Store Kalman gain k_t
   if isempty(Y_t)
-      S.k_t = zeros(m,m);
+      S.k_t = zeros(sA,sA);
   else
       S.k_t = VCF * C_t;
   end

@@ -7,7 +7,7 @@ function [frq]  = set_frequencies(string_frq)
   %   Number of high frequency periods in each low frequency period to make
   %   the helper matrix J
   k = size(string_frq,1); %number of series
-  frq = ones(k,1);
+  frq = 28*ones(k,1); %if nothing is found, default is monthly
   frq(strcmp('d', string_frq)) = 1;
   frq(strcmp('w', string_frq)) = 7;
   frq(strcmp('bw', string_frq)) = 14;

@@ -55,7 +55,7 @@ frq = set_frequencies(frq);
 optNaN.method = 2; % Remove leading and closing zeros
 optNaN.k = 3;      % Setting for filter(): See remNaN_spline
 
-[A, H, Q, R] = InitCond(xNaN,m,p,optNaN,frq,isdiff);
+[A_new, H_new, Q_new, R_new] = InitCond(xNaN,m,p,optNaN,frq,isdiff);
 
 % Initialize EM loop values
 previous_loglik = -inf;
@@ -65,6 +65,22 @@ max_iter = 5000;
 
 % Y for the estimation is WITH missing data
 Y = xNaN'; %transpose for faster column-wise access
+
+% %Initial variance following Hamilton 1994
+% sA = size(A_new,2);
+% xx = eye(sA^2) - kron(A_new,A_new);
+% vQ = reshape(Q_new, (sA)^2, 1);
+% V_0 = xx\vQ;
+% V_0 = reshape(V_0,sA,sA); 
+% 
+% Z_0 = zeros(sA,1);
+% 
+% % Run filter/smoother
+% HJ = [get_CJ(H_new,frq,isdiff,p), eye(N)];
+% [Zsmooth, ~, ~, LogLik] = runKF(Y, A_new, HJ, Q_new, diag(R_new), Z_0, V_0);
+% Zsmooth = Zsmooth(:, 2:end)'; % Drop pre-sample values 
+% 
+% plot(dates,Zsmooth(:,1:2))
 
 %% EM LOOP ----------------------------------------------------------------
 
@@ -78,14 +94,14 @@ Y = xNaN'; %transpose for faster column-wise access
 %y_est = remNaNs_spline(xNaN,optNaN)';
 
 while (num_iter < max_iter) && ~converged % Loop until converges or max iter.
-
-    [H_new, R_new, A_new, Q_new, loglik] = ...  % Applying EM algorithm
-        EMstep(Y, A, H, Q, R, p, frq, isdiff);
-
+    
     H = H_new;
     R = R_new;
     A = A_new;
     Q = Q_new;
+
+    [H_new, R_new, A_new, Q_new, loglik] = ...  % Applying EM algorithm
+        EMstep(Y, A, H, Q, R, p, frq, isdiff);
 
     if num_iter > 2  % Checking convergence
         [converged, ~] = ...
@@ -98,9 +114,23 @@ while (num_iter < max_iter) && ~converged % Loop until converges or max iter.
         disp(['  Loglik','   (% Change)'])
         disp([num2str(loglik),'   (', sprintf('%6.2f',100*((loglik-previous_loglik)/previous_loglik)) '%)'])
     end
+    
+    eA = eig(A_new);
+    
+    if max(eA) >= 1
+        disp('Estimated transition matrix non-stationary, breaking EM iterations')
+        break
+    end
     %LL = [LL loglik];
     previous_loglik = loglik;
     num_iter =  num_iter + 1;
+    
+    if converged
+        H = H_new;
+        R = R_new;
+        A = A_new;
+        Q = Q_new;
+    end
 
 end
 
@@ -132,11 +162,9 @@ Z_0 = zeros(sA,1);
 
 % Run filter/smoother
 HJ = [get_CJ(H,frq,isdiff,p), eye(N)];
-[Zsmooth, ~, ~, LogLik, Update] = runKF(X', A, HJ, Q, diag(R), Z_0, V_0);
+xpNaN = 10*(X_pred-repmat(Mx,T,1))./repmat(Wx,T,1); 
+[Zsmooth, ~, ~, LogLik, Update] = runKF(xpNaN', A, HJ, Q, diag(R), Z_0, V_0);
 Zsmooth = Zsmooth(:, 2:end)'; % Drop pre-sample values 
-
-plot(dates,Zsmooth(:,1:2))
-
 
 x_sm = Zsmooth * HJ';  % Get smoothed X
 

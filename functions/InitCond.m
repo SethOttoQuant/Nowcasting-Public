@@ -32,7 +32,7 @@ function [ A, C, Q, R, V_0] = InitCond(x,r,p,optNaN,frq,isdiff)
 z = xBal*C; % Initial guess for factors
 Z = stack_obs(z,p,true);
 sV = size(Z,2);
-B = (z(p+1:T,:)'*Z)/(Z'*Z + T*eye(sV)); %transition matrix
+B = (z(p+1:T,:)'*Z)/(Z'*Z + eye(sV)); %transition matrix
 E = z(p+1:T,:)-Z*B';
 %Adjusting for differenced low frequency data
 lags = frq;

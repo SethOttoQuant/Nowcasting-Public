@@ -107,9 +107,13 @@ mp = m*p;
 EZZ = Zsmooth(1:mp, 2:end) * Zsmooth(1:mp, 2:end)'...
     + sum(Vsmooth(1:mp, 1:mp, 2:end) ,3); % WE adjustment
 
+EZZ = (EZZ + EZZ')/2;
+
 % E[f_{t-1}*f_{t-1}' | Omega_T]
 EZZ_BB = Zsmooth(1:mp, 1:end-1)*Zsmooth(1:mp, 1:end-1)'...
         + sum(Vsmooth(1:mp, 1:mp, 1:end-1), 3); % WE adjustment
+    
+EZZ_BB = (EZZ_BB + EZZ_BB')/2;
 
 % E[f_t*f_{t-1}' | Omega_T]
 EZZ_FB = Zsmooth(1:m, 2:end)*Zsmooth(1:mp, 1:end-1)'...
@@ -169,6 +173,7 @@ for j = 1:nobs % Loop through observables
     end
     V_ar = sum(Vsmooth(sV+j,sV+j,logical([0,y_idx])),3); %WE adjustment for AR(1) error term
     EZZ = Z_obs*Z_obs' + V_obs;
+    EZZ = (EZZ + EZZ')/2;
     H_new(j,:) = (y_obs*Z_obs')/ EZZ;
     R(j) = (sum((y_obs-H_new(j,:)*Z_obs).^2)+ H_new(j,:)*V_obs*H_new(j,:)' + V_ar)/size(y_obs,2);
 end

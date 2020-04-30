@@ -52,7 +52,7 @@ dates = table2array(readtable('dates.csv'));
 datesM = datenum(dates); %dates in Matlab format
 
 %% Run dynamic factor model (DFM) and save estimation output as 'ResDFM'.
-threshold = 1e-5; % Set to 1e-5 for more robust estimates
+threshold = 1e-5; % Set to 1e-6 for more robust estimates
 
 % A key difference from the NY Fed code is the use of the helper matrix J:
 %

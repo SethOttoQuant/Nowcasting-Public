@@ -41,7 +41,7 @@ fprintf('Estimating the dynamic factor model (DFM) ... \n\n');
 [T,N] = size(X);
 
 if(nargin < 5)
-    threshold = 1e-4;  % EM loop threshold (default value)
+    threshold = 1e-5;  % EM loop threshold (default value)
 end
 
 %% Prepare data -----------------------------------------------------------

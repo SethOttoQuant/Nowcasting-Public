@@ -2,35 +2,30 @@
 
 This code is a simplified version of the open source code from "[Macroeconomic Nowcasting and Forecasting with Big Data](https://www.newyorkfed.org/research/staff_reports/sr830.html)" by Brandyn Bok, Daniele Caratelli, Domenico Giannone, Argia M. Sbordone, and Andrea Tambalotti, *Staff Reports 830*, Federal Reserve Bank of New York (prepared for Volume 10 of the *Annual Review of Economics*).
 
-**Note:** This simplified code is written so that it should be easy to follow and implement for any standard mixed frequency data set. These simplifications and the flexibility of this code comes at the expense of removing data blocks (i.e. global, soft, real, labor). **These modifications were implemented by Seth Leonard/OttoQuant and are not associated with the Federal Reserve Bank of New York or any of its staff.**
+**Note:** This simplified code is written so that it should be easy to follow and implement for any standard mixed frequency data set. These simplifications and the flexibility of this code comes at the expense of removing data blocks (i.e. global, soft, real, labor) and AR(1) error terms. **These modifications were implemented by Seth Leonard/OttoQuant and are not associated with the Federal Reserve Bank of New York or any of its staff.**
 
 ## Using this code
 
-There are two branches on this repo. 'master' contains the basic code ommiting AR(1) error terms for each input series. If you want to understand how models are estimated, this is the place to start. 'AR1_errors' includes autoregressive errors for each data series. It therefore has a slightly longer run time and the code is more complicated. 
+This code allows replication of results obtained in the OttoQuant interface for dynamic factor models estimated by maximum likelihood. Example parameters and data are included for those without an OttoQuant subscription. 
 
-In the original NY Fed Nowcasting code, identification came from using data blocks. In both versions of this code, identification is based on orthogonal shocks to factors. Because this code does not use blocks, models are in fact less restricted. 
-
-This code accepts the following frequencies:
- - 'd' daily
- - 'w' weekly
- - 'bw' every other week
- - 'm' monthly
- - 'q' quarterly
- - 'y' yearly
+To replicate a frequentest dynamic factor model:
 
 
-## Download instructions
+1. Download the master branch of this repo in .zip format.
+2. Extract the zip file and save it to a convenient location. We’ll refer to this file as “/Nowcasting-Public-master” below. 
+3. Log into the OttoQuant [interface](app.ottoquant.com), select or upload data, and estimate your model.
+4. Once estimation is complete, click “DOWNLOAD INPUT DATA AND PARAMETERS”
+5. Extract the zip file
+6. Find the folder “data” in the Nowcasting-Public repo you downloaded in step 1. Save the (extracted) contents of the zip file to this folder. /Nowcasting-Public-master/data should now contain:
+  - estimation_data_no_outliers.csv
+  - prediction_data_with_outliers.csv
+  - low_frq_trends.csv
+  - dates.csv
+  - model.json 
+7. In the folder “/Nowcasting-Public-master”, open run_DFM.m
+8. Click “Run”
 
-Download the code as a ZIP file by clicking the green 'Clone or download' button and selecting 'Download ZIP'.
-
-## File and folder description
-
-* `data/` : example US data downloaded from [FRED](https://fred.stlouisfed.org/)
-* `functions/` : functions for loading data, estimating model, and updating predictions
-* `example_DFM.m` : example script to estimate a dynamic factor model (DFM) for a panel of monthly and quarterly series and to create nowcasts
-* `ResDFM.mat` : example DFM estimation output
-* `Spec_US_example.xls` : example model specification for the US. Note that some inputs from the original code (i.e. inputs relating to blocks) are not used.
-
+Once the model had converged to the maximum likelihood parameter estimates you will see several tables and charts. Results are stored in the structure “Res” (in your Workspace)
 
 ## Required software and versioning
 

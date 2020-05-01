@@ -1,28 +1,20 @@
-function Res = dfm(X,Spec,threshold)
+function Res = dfm(X,X_pred,m,p,frq,isdiff,threshold)
 %DFM()    Runs the dynamic factor model
-%
-%  Syntax:
-%    Res = DFM(X,Par)
-%
-%  Description:
-%   DFM() inputs the organized and transformed data X and parameter structure Par.
-%   Then, the function outputs dynamic factor model structure Res and data
-%   summary statistics (mean and standard deviation).
 %
 %  Input arguments:
 %    X: Transformed input data (i.e. log differenced where needed).
-%      Par.Transformation: for mixed frequency aggregation 
-%      Par.Frequency: frequency of input data (flexible here)
-%      Par.p: Number of lags in transition matrix
-%      Par.r: Number of factors (all are treated as global)
+%    m: number of factors
+%    p: number of lags
+%    isdiff: logical (T/F) indicating if series in corresponding column is
+%    differenced (for mixed frequency aggregation)
 %
 % Output Arguments:
 %
 %   Res - structure of model results with the following fields
 %       .X_sm  Kalman-smoothed data where missing values are replaced by their expectation
 %       .Z  Smoothed states. 
-%       .C  Observation matrix. For low frequency data, C gives loadings for aggregated factors
-%       .CJ Observation matrix times appropriate helper matrix J for each
+%       .H  Observation matrix. For low frequency data, C gives loadings for aggregated factors
+%       .HJ Observation matrix times appropriate helper matrix J for each
 %       series. This is what is actually used to get fitted values of
 %       observables. 
 %       .R: Covariance for observation matrix residuals
@@ -44,53 +36,48 @@ function Res = dfm(X,Spec,threshold)
 
 %% Store model parameters ------------------------------------------------
 
-
-% DFM input specifications: See documentation for details
-if(isfield(Spec, 'p'))
-    Par.p = Spec.p;
-else
-    Par.p = 1;   % Number of lags in autoregressive of factor (same for all factors)
-end                        
-if(isfield(Spec, 'r'))
-    Par.r = Spec.r;
-else
-    Par.r = 1;   % Number of lags in autoregressive of factor (same for all factors)
-end  
-
 fprintf('Estimating the dynamic factor model (DFM) ... \n\n');
 
-[T,~] = size(X);
-r = Par.r; %number of factors
-p = Par.p;
-frq = set_frequencies(Spec.Frequency);
-isdiff = is_diff(Spec.Transformation);
+[T,k] = size(X);
 
-if(nargin < 3)
+if(nargin < 5)
     threshold = 1e-5;  % EM loop threshold (default value)
 end
 
 %% Prepare data -----------------------------------------------------------
 Mx = mean(X,'omitnan');
 Wx = std(X,'omitnan');
-xNaN = (X-repmat(Mx,T,1))./repmat(Wx,T,1);  % Standardize series, ie scale()
+xNaN = 10*(X-repmat(Mx,T,1))./repmat(Wx,T,1);  % Standardize series, ie scale()
 
+frq = set_frequencies(frq);
 %% Initial Conditions -----------------------------------------------------
 
-optNaN.method = 2; % Remove leading and closing zeros
-optNaN.k = 3;      % Setting for filter(): See remNaN_spline
-
-[A, C, Q, R, V_0] = InitCond(xNaN,r,p,optNaN,frq,isdiff);
-Z_0 = zeros(size(A,1),1);
+[A_new, H_new, Q_new, R_new] = InitCond(xNaN,m,p,frq,isdiff);
 
 % Initialize EM loop values
 previous_loglik = -inf;
 num_iter = 0;
-LL = -inf;
 converged = 0;
 max_iter = 5000;
 
 % Y for the estimation is WITH missing data
 Y = xNaN'; %transpose for faster column-wise access
+
+% %Initial variance following Hamilton 1994
+% sA = size(A_new,2);
+% xx = eye(sA^2) - kron(A_new,A_new);
+% vQ = reshape(Q_new, (sA)^2, 1);
+% V_0 = xx\vQ;
+% V_0 = reshape(V_0,sA,sA); 
+% 
+% Z_0 = zeros(sA,1);
+% 
+% % Run filter/smoother
+% HJ = [get_CJ(H_new,frq,isdiff,p), eye(N)];
+% [Zsmooth, ~, ~, LogLik] = runKF(Y, A_new, HJ, Q_new, diag(R_new), Z_0, V_0);
+% Zsmooth = Zsmooth(:, 2:end)'; % Drop pre-sample values 
+% 
+% plot(dates,Zsmooth(:,1:2))
 
 %% EM LOOP ----------------------------------------------------------------
 
@@ -104,17 +91,17 @@ Y = xNaN'; %transpose for faster column-wise access
 %y_est = remNaNs_spline(xNaN,optNaN)';
 
 while (num_iter < max_iter) && ~converged % Loop until converges or max iter.
-
-    [C_new, R_new, A_new, Q_new, Z_0, V_0, loglik] = ...  % Applying EM algorithm
-        EMstep(Y, A, C, Q, R, Z_0, V_0, p, frq, isdiff);
-
-    C = C_new;
+    
+    H = H_new;
     R = R_new;
     A = A_new;
     Q = Q_new;
 
+    [H_new, R_new, A_new, Q_new, loglik] = ...  % Applying EM algorithm
+        EMstep(Y, A, H, Q, R, p, frq, isdiff);
+
     if num_iter > 2  % Checking convergence
-        [converged, decrease(num_iter + 1)] = ...
+        [converged, ~] = ...
             em_converged(loglik, previous_loglik, threshold, 1);
     end
 
@@ -124,9 +111,23 @@ while (num_iter < max_iter) && ~converged % Loop until converges or max iter.
         disp(['  Loglik','   (% Change)'])
         disp([num2str(loglik),'   (', sprintf('%6.2f',100*((loglik-previous_loglik)/previous_loglik)) '%)'])
     end
-    LL = [LL loglik];
+    
+    eA = eig(A_new);
+    
+    if max(eA) >= 1
+        disp('Estimated transition matrix non-stationary, breaking EM iterations')
+        break
+    end
+    %LL = [LL loglik];
     previous_loglik = loglik;
     num_iter =  num_iter + 1;
+    
+    if converged
+        H = H_new;
+        R = R_new;
+        A = A_new;
+        Q = Q_new;
+    end
 
 end
 
@@ -137,26 +138,45 @@ else
 end
 
 % Final run of the Kalman filter
-%Normalization
-m = size(Z_0,1); 
-pp = m/r;
-chlky = chol(Q(1:r,1:r),'lower');
-scl = kron(eye(pp),eye(r)/chlky); 
+% Normalize to force orthogonal shocks to factors
+sA = size(A,1);
+sV = (sA - k);
+pp = sV/m;
+chlky = chol(Q(1:m,1:m),'lower');
+scl = kron(eye(pp),eye(m)/chlky); 
 Iscl = kron(eye(pp),chlky);
-Q(1:r,1:r) = eye(r); %due to normalization
-A = scl*A*Iscl;
-C = C*chlky;
-CJ = get_CJ(C,frq,isdiff,p);
-Zsmooth = runKF(Y, A, CJ, Q, diag(R), Z_0, V_0, r)';
+Q(1:m,1:m) = eye(m); %due to normalization
+A(1:sV,1:sV) = scl*A(1:sV,1:sV)*Iscl;
+H = H*chlky;
 
-x_sm = Zsmooth(2:end,:) * CJ';  % Get smoothed X
+%Initial variance following Hamilton 1994
+V_0 = long_run_var(A,Q);
+
+Z_0 = zeros(sA,1);
+
+% Run filter/smoother
+HJ = get_CJ(H,frq,isdiff,p);
+xpNaN = 10*(X_pred-repmat(Mx,T,1))./repmat(Wx,T,1); 
+[Zsmooth, Vsmooth, ~, LogLik, Update] = runKF(xpNaN', A, HJ, Q, diag(R), Z_0, V_0);
+Zsmooth = Zsmooth(:, 2:end)'; % Drop pre-sample values 
+Vsmooth = Vsmooth(:, :, 2:end); % Drop pre-sample values 
+var_Y = zeros(T,k);
+for t=1:T
+    var_Y(t,:) = diag(HJ*Vsmooth(:,:,t)*HJ')' + R;
+end
+x_sm = Zsmooth * HJ';  % Get smoothed X
+% 1 s.d. confidence intervals
+x_upper = x_sm + sqrt(var_Y);
+x_lower = x_sm - sqrt(var_Y); 
 
 %%  Loading the structure with the results --------------------------------
-Res.x_sm = x_sm;
-Res.X_sm = repmat(Wx,T,1) .* x_sm + repmat(Mx,T,1);  % Unstandardized, smoothed
-Res.Z = Zsmooth(2:end,:);
-Res.C = C;
-Res.CJ = CJ;
+Res.x_sm = x_sm; %smoothed (fitted) values of inputs data
+Res.X_sm = repmat(Wx,T,1).*x_sm/10 + repmat(Mx,T,1);  % Unstandardized, smoothed values
+Res.X_upper = repmat(Wx,T,1).*x_upper/10 + repmat(Mx,T,1); 
+Res.X_lower = repmat(Wx,T,1).*x_lower/10 + repmat(Mx,T,1); 
+Res.Z = Zsmooth;
+Res.H = H;
+Res.HJ = HJ;
 Res.R = R;
 Res.A = A;
 Res.Q = Q;
@@ -164,8 +184,11 @@ Res.Mx = Mx;
 Res.Wx = Wx;
 Res.Z_0 = Z_0;
 Res.V_0 = V_0;
-Res.r = r;
+Res.m = m;
 Res.p = p;
+Res.forecast_loglikelihood = real(LogLik);
+Res.fitted_loglikelihood = real(loglik);
+Res.Update = Update;
 
 %% Display output
 % Table with names and factor loadings
@@ -174,8 +197,8 @@ fprintf('\n\n\n');
 
 try
 disp('Table 4: Factor Loadings');
-disp(array2table(Res.C,...  % Only select lag(0) terms
-     'RowNames', strrep(Spec.SeriesName(1:k),' ','_')));
+disp(array2table(Res.H,...  % Only select lag(0) terms
+     'RowNames', strrep(Spec.colnames(1:k),' ','_')));
 fprintf('\n\n\n');
 catch
 end
@@ -184,10 +207,9 @@ end
 
 try
 disp('Table 5: Autoregressive Coefficients')
-disp(table(A(1:r,1:r*p), ...  
-           Q(1:r,1:r), ...
+disp(table(A(1:m,1:m), ...  
+           Q(1:m,1:m), ...
            'VariableNames', {'AR_Coefficient', 'Variance_Residual'}));
-          % 'RowNames',      strrep(Spec.BlockNames,' ','_')));
 fprintf('\n\n\n');
 catch
 end

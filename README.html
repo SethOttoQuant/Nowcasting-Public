@@ -368,7 +368,20 @@ summary {
 <div id="nowcasting" class="section level1">
 <h1>Nowcasting</h1>
 <p>This code is a simplified version of the open source code from “<a href="https://www.newyorkfed.org/research/staff_reports/sr830.html">Macroeconomic Nowcasting and Forecasting with Big Data</a>” by Brandyn Bok, Daniele Caratelli, Domenico Giannone, Argia M. Sbordone, and Andrea Tambalotti, <em>Staff Reports 830</em>, Federal Reserve Bank of New York (prepared for Volume 10 of the <em>Annual Review of Economics</em>).</p>
-<p><strong>Note:</strong> This simplified code is written so that it should be easy to follow and implement. These simplification comes at the expense of removing data blocks (i.e. global, soft, real, labor) and AR(1) terms for each input series. These modifications were implemented by Seth Leonard and are not associated with the Federal Reserve Bank of New York.</p>
+<p><strong>Note:</strong> This simplified code is written so that it should be easy to follow and implement for any standard mixed frequency data set. These simplifications and the flexibility of this code comes at the expense of removing data blocks (i.e. global, soft, real, labor) and AR(1) error terms. <strong>These modifications were implemented by Seth Leonard/OttoQuant and are not associated with the Federal Reserve Bank of New York or any of its staff.</strong></p>
+<div id="using-this-code" class="section level2">
+<h2>Using this code</h2>
+<p>This code allows replication of results obtained in the OttoQuant interface for dynamic factor models estimated by maximum likelihood. Example parameters and data are included for those without an OttoQuant subscription.</p>
+<p>To replicate a frequentest dynamic factor model:</p>
+<p>In the original NY Fed Nowcasting code, identification came from using data blocks. In both versions of this code, identification is based on orthogonal shocks to factors. Because this code does not use blocks, models are in fact less restricted.</p>
+<p>This code accepts the following frequencies: - ‘d’ daily - ‘w’ weekly - ‘bw’ every other week - ‘m’ monthly - ‘q’ quarterly - ‘y’ yearly ======= &gt;&gt;&gt;&gt;&gt;&gt;&gt; OttoQuant-replication-no-ar-errors</p>
+</div>
+<div id="using-this-code-1" class="section level2">
+<h2>Using this code</h2>
+<p>There are two branches on this repo. ‘master’ contains the basic code ommiting AR(1) error terms for each input series. If you want to understand how models are estimated, this is the place to start. ‘AR1_errors’ includes autoregressive errors for each data series. It therefore has a slightly longer run time and the code is more complicated.</p>
+<p>In the original NY Fed Nowcasting code, identification came from using data blocks. In both versions of this code, identification is based on orthogonal shocks to factors. Because this code does not use blocks, models are in fact less restricted.</p>
+<p>This code accepts the following frequencies: - ‘d’ daily - ‘w’ weekly - ‘bw’ every other week - ‘m’ monthly - ‘q’ quarterly - ‘y’ yearly</p>
+</div>
 <div id="download-instructions" class="section level2">
 <h2>Download instructions</h2>
 <p>Download the code as a ZIP file by clicking the green ‘Clone or download’ button and selecting ‘Download ZIP’.</p>

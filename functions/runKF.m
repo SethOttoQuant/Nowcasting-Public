@@ -1,5 +1,5 @@
 
-function [zsmooth, Vsmooth, VVsmooth, loglik] = runKF(Y, A, C, Q, R, Z_0, V_0, r)
+function [zsmooth, Vsmooth, VVsmooth, loglik, Update] = runKF(Y, A, HJ, Q, R, Z_0, V_0)
 %runKF()    Applies Kalman filter and fixed-interval smoother
 %
 %  Syntax:
@@ -45,7 +45,7 @@ function [zsmooth, Vsmooth, VVsmooth, loglik] = runKF(Y, A, C, Q, R, Z_0, V_0, r
 % Users are kindly requested to add acknowledgements to published work and 
 % to cite the above reference in any resulting publications
 
-S = SKF(Y, A, C, Q, R, Z_0, V_0, r);  % Kalman filter
+S = SKF(Y, A, HJ, Q, R, Z_0, V_0);  % Kalman filter
 S = FIS(A, S);                     % Fixed interval smoother
 
 % Organize output 
@@ -53,5 +53,6 @@ zsmooth = S.ZmT;
 Vsmooth = S.VmT;
 VVsmooth = S.VmT_1;
 loglik = S.loglik;
+Update = S.UD;
 
 end

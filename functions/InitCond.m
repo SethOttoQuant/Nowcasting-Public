@@ -22,33 +22,39 @@
 %  - Z_0: Initial value of state
 %  - V_0: Initial value of covariance matrix
 
-function [ A, C, Q, R, V_0] = InitCond(x,r,p,optNaN,frq,is_diff)
 
-OPTS.disp=0;  % Turns off diagnostic information for eigenvalue computation
-[xBal,~] = remNaNs_spline(x,optNaN);  % Spline without NaNs
+function [ A, H, Q, R, V_0] = InitCond(X,m,p,frq,isdiff)
 
-[T,~] = size(xBal);  % Time T series number N
-[C, ~] = eigs(cov(xBal), r, 'lm'); % Initial guess for loadings
-z = xBal*C; % Initial guess for factors
+[T,k] = size(X);
+xBal = zeros(T,k);
+for j=1:k
+    xBal(:,j) = spline_fill_centered(X(:,j));
+end
+[H, ~] = eigs(cov(xBal), m, 'lm'); % Initial guess for loadings
+z = xBal*H; % Initial guess for factors
 Z = stack_obs(z,p,true);
-B = (z(p+1:T,:)'*Z)/(Z'*Z); %transition matrix
+sV = size(Z,2);
+B = (z(p+1:T,:)'*Z)/(Z'*Z + eye(sV)); %transition matrix
 E = z(p+1:T,:)-Z*B';
 %Adjusting for differenced low frequency data
 lags = frq;
-lags(is_diff,:) = arrayfun(@(x)(2*x-1),frq(is_diff,:));
+lags(isdiff,:) = arrayfun(@(x)(2*x-1),frq(isdiff,:));
 pp = max([lags;p]);
-Q = zeros(r*pp,r*pp);
-Q(1:r,1:r) = E'*E/(T-p);
-E = xBal - z*C';
-R = mean(E.^2);
+sA = m*pp; %size of A matrix
+Q = zeros(sA,sA);
+Q(1:m,1:m) = E'*E/(T-p);
+%Shocks to observations
+E = xBal - z*H';
+E = E(2:T,:);
+R = mean(E.^2) + 1;
+
 if pp>p
-    B = [B, zeros(r,r*(pp-p))];
+    B = [B, zeros(m,m*(pp-p))];
 end
-A = comp_form(B);
+A = zeros(sA);
+A(1:m*pp, 1:m*pp) = comp_form(B);
+
 %Initial variance following Hamilton 1994
-xx = eye((r*pp)^2) - kron(A,A);
-vQ = reshape(Q, (r*pp)^2, 1);
-V_0 = xx\vQ;
-V_0 = reshape(V_0,r*pp,r*pp); 
+V_0 = long_run_var(A,Q);
 return
 end

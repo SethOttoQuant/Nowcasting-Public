@@ -3,8 +3,8 @@
 % This is a simplified version of the New York Fed Nowcasting Code on
 % [Github](https://github.com/FRBNY-TimeSeriesAnalysis/Nowcasting).
 % This version does not include blocks for data types (i.e. global, soft,
-% real, labor) but does include AR(1) components for series.
-% It also accepts a wider range of frequency mixes,
+% real, labor) or AR(1) components for series.
+% It accepts a wide range of frequency mixes,
 % accepting inputs y, q, m, bw, w, d. Key differences are highlighted
 % below.
 %
@@ -122,7 +122,7 @@ pause(5); % to display plot
 %Using a scatter plot for true observations is confusing, so well use a
 %line plot with any missing observations filled via cubic spline.
 plot_idx = 1; %Change this to plot a different series
-x_plot = spline_fill_centered(X_pred(:,plot_idx)) + Trend(:,plot_idx);
+x_plot = spline_fill_plot(X_pred(:,plot_idx)) + Trend(:,plot_idx);
 
 figure('Name', Spec.colnames{plot_idx});
 hold on

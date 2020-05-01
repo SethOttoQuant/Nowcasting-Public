@@ -38,11 +38,11 @@ function Res = dfm(X,X_pred,m,p,frq,isdiff,threshold)
 
 fprintf('Estimating the dynamic factor model (DFM) ... \n\n');
 
-[T,k] = size(X);
-
 if(nargin < 5)
     threshold = 1e-5;  % EM loop threshold (default value)
 end
+
+[T,k] = size(X);
 
 %% Prepare data -----------------------------------------------------------
 Mx = mean(X,'omitnan');
@@ -63,16 +63,7 @@ max_iter = 5000;
 % Y for the estimation is WITH missing data
 Y = xNaN'; %transpose for faster column-wise access
 
-% %Initial variance following Hamilton 1994
-% sA = size(A_new,2);
-% xx = eye(sA^2) - kron(A_new,A_new);
-% vQ = reshape(Q_new, (sA)^2, 1);
-% V_0 = xx\vQ;
-% V_0 = reshape(V_0,sA,sA); 
-% 
-% Z_0 = zeros(sA,1);
-% 
-% % Run filter/smoother
+% % Run filter/smoother for initial conditions if desired
 % HJ = [get_CJ(H_new,frq,isdiff,p), eye(N)];
 % [Zsmooth, ~, ~, LogLik] = runKF(Y, A_new, HJ, Q_new, diag(R_new), Z_0, V_0);
 % Zsmooth = Zsmooth(:, 2:end)'; % Drop pre-sample values 
@@ -82,13 +73,9 @@ Y = xNaN'; %transpose for faster column-wise access
 %% EM LOOP ----------------------------------------------------------------
 
 %The model can be written as
-%y = C*Z + e;
+%y = HJ*Z + e;
 %Z = A*Z(-1) + v
 %where y is NxT, Z is (pr)xT, etc
-
-% Remove the leading and ending nans
-%optNaN.method = 3;
-%y_est = remNaNs_spline(xNaN,optNaN)';
 
 while (num_iter < max_iter) && ~converged % Loop until converges or max iter.
     
@@ -112,7 +99,7 @@ while (num_iter < max_iter) && ~converged % Loop until converges or max iter.
         disp([num2str(loglik),'   (', sprintf('%6.2f',100*((loglik-previous_loglik)/previous_loglik)) '%)'])
     end
     
-    eA = eig(A_new);
+    eA = abs(eig(A_new));
     
     if max(eA) >= 1
         disp('Estimated transition matrix non-stationary, breaking EM iterations')
@@ -138,20 +125,19 @@ else
 end
 
 % Final run of the Kalman filter
-% Normalize to force orthogonal shocks to factors
 sA = size(A,1);
-sV = (sA - k);
-pp = sV/m;
-chlky = chol(Q(1:m,1:m),'lower');
-scl = kron(eye(pp),eye(m)/chlky); 
-Iscl = kron(eye(pp),chlky);
-Q(1:m,1:m) = eye(m); %due to normalization
-A(1:sV,1:sV) = scl*A(1:sV,1:sV)*Iscl;
-H = H*chlky;
+
+% One can, if desired, normalize the model to enforce orthogonal shocks.
+% pp = sA/m;
+% chlky = chol(Q(1:m,1:m),'lower');
+% scl = kron(eye(pp),eye(m)/chlky); 
+% Iscl = kron(eye(pp),chlky);
+% Q(1:m,1:m) = eye(m); %due to normalization
+% A = scl*A*Iscl;
+% H = H*chlky;
 
 %Initial variance following Hamilton 1994
 V_0 = long_run_var(A,Q);
-
 Z_0 = zeros(sA,1);
 
 % Run filter/smoother

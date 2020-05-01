@@ -38,7 +38,7 @@ function Res = dfm(X,X_pred,m,p,frq,isdiff,threshold)
 
 fprintf('Estimating the dynamic factor model (DFM) ... \n\n');
 
-[T,N] = size(X);
+[T,k] = size(X);
 
 if(nargin < 5)
     threshold = 1e-5;  % EM loop threshold (default value)
@@ -52,10 +52,7 @@ xNaN = 10*(X-repmat(Mx,T,1))./repmat(Wx,T,1);  % Standardize series, ie scale()
 frq = set_frequencies(frq);
 %% Initial Conditions -----------------------------------------------------
 
-optNaN.method = 2; % Remove leading and closing zeros
-optNaN.k = 3;      % Setting for filter(): See remNaN_spline
-
-[A_new, H_new, Q_new, R_new] = InitCond(xNaN,m,p,optNaN,frq,isdiff);
+[A_new, H_new, Q_new, R_new] = InitCond(xNaN,m,p,frq,isdiff);
 
 % Initialize EM loop values
 previous_loglik = -inf;
@@ -141,9 +138,9 @@ else
 end
 
 % Final run of the Kalman filter
-% Normalize
+% Normalize to force orthogonal shocks to factors
 sA = size(A,1);
-sV = (sA - N);
+sV = (sA - k);
 pp = sV/m;
 chlky = chol(Q(1:m,1:m),'lower');
 scl = kron(eye(pp),eye(m)/chlky); 
@@ -153,24 +150,30 @@ A(1:sV,1:sV) = scl*A(1:sV,1:sV)*Iscl;
 H = H*chlky;
 
 %Initial variance following Hamilton 1994
-xx = eye(sA^2) - kron(A,A);
-vQ = reshape(Q, (sA)^2, 1);
-V_0 = xx\vQ;
-V_0 = reshape(V_0,sA,sA); 
+V_0 = long_run_var(A,Q);
 
 Z_0 = zeros(sA,1);
 
 % Run filter/smoother
-HJ = [get_CJ(H,frq,isdiff,p), eye(N)];
+HJ = get_CJ(H,frq,isdiff,p);
 xpNaN = 10*(X_pred-repmat(Mx,T,1))./repmat(Wx,T,1); 
-[Zsmooth, ~, ~, LogLik, Update] = runKF(xpNaN', A, HJ, Q, diag(R), Z_0, V_0);
+[Zsmooth, Vsmooth, ~, LogLik, Update] = runKF(xpNaN', A, HJ, Q, diag(R), Z_0, V_0);
 Zsmooth = Zsmooth(:, 2:end)'; % Drop pre-sample values 
-
+Vsmooth = Vsmooth(:, :, 2:end); % Drop pre-sample values 
+var_Y = zeros(T,k);
+for t=1:T
+    var_Y(t,:) = diag(HJ*Vsmooth(:,:,t)*HJ')' + R;
+end
 x_sm = Zsmooth * HJ';  % Get smoothed X
+% 1 s.d. confidence intervals
+x_upper = x_sm + sqrt(var_Y);
+x_lower = x_sm - sqrt(var_Y); 
 
 %%  Loading the structure with the results --------------------------------
-Res.x_sm = x_sm;
-Res.X_sm = repmat(Wx,T,1).*x_sm/10 + repmat(Mx,T,1);  % Unstandardized, smoothed
+Res.x_sm = x_sm; %smoothed (fitted) values of inputs data
+Res.X_sm = repmat(Wx,T,1).*x_sm/10 + repmat(Mx,T,1);  % Unstandardized, smoothed values
+Res.X_upper = repmat(Wx,T,1).*x_upper/10 + repmat(Mx,T,1); 
+Res.X_lower = repmat(Wx,T,1).*x_lower/10 + repmat(Mx,T,1); 
 Res.Z = Zsmooth;
 Res.H = H;
 Res.HJ = HJ;
@@ -183,7 +186,8 @@ Res.Z_0 = Z_0;
 Res.V_0 = V_0;
 Res.m = m;
 Res.p = p;
-Res.ll = real(LogLik);
+Res.forecast_loglikelihood = real(LogLik);
+Res.fitted_loglikelihood = real(loglik);
 Res.Update = Update;
 
 %% Display output
@@ -194,7 +198,7 @@ fprintf('\n\n\n');
 try
 disp('Table 4: Factor Loadings');
 disp(array2table(Res.H,...  % Only select lag(0) terms
-     'RowNames', strrep(Spec.colnames(1:N),' ','_')));
+     'RowNames', strrep(Spec.colnames(1:k),' ','_')));
 fprintf('\n\n\n');
 catch
 end
@@ -203,7 +207,7 @@ end
 
 try
 disp('Table 5: Autoregressive Coefficients')
-disp(table(A(1:m,1:m*p), ...  
+disp(table(A(1:m,1:m), ...  
            Q(1:m,1:m), ...
            'VariableNames', {'AR_Coefficient', 'Variance_Residual'}));
 fprintf('\n\n\n');

@@ -48,11 +48,12 @@ opts.DataLines = 1;
 opts.VariableTypes = 'double';
 X = readmatrix('estimation_data_no_outliers.csv', opts);
 X_pred = readmatrix('prediction_data_with_outliers.csv', opts);
+Trend = readmatrix('low_frq_trends.csv', opts);
 dates = table2array(readtable('dates.csv'));
 datesM = datenum(dates); %dates in Matlab format
 
 %% Run dynamic factor model (DFM) and save estimation output as 'ResDFM'.
-threshold = 1e-5; % Set to 1e-6 for more robust estimates
+threshold = 1e-6; % Set to 1e-6 for more robust estimates
 
 % A key difference from the NY Fed code is the use of the helper matrix J:
 %
@@ -81,116 +82,57 @@ frq = Spec.frq;
 Res = dfm(X, X_pred, m, p, frq, isdiff, threshold); %Estimate the model
 save('ResDFM','Res','Spec');
 
-%% Plot Factors 
+%% Compare with results estimated by OttoQuant
+
+% Fitted log likelihoods should be very similar
+disp(['C++ fitted log likelihood is ', num2str(Spec.fitted_loglikelihood)])
+disp(['Matlab fitted log likelihood is ', num2str(Res.fitted_loglikelihood)])
+
+% However, models with similar likelihoods can lead to different results
+% when fitted with different data due to the latency of factors
+disp(['C++ forecast log likelihood is ', num2str(Spec.forecast_loglikelihood)])
+disp(['Matlab forecast log likelihood is ', num2str(Res.forecast_loglikelihood)])
+
+% The best way to address this issue of model identification is through
+% Bayesian estimation by simulation. When models with similar likelihoods
+% yeild different results, this uncertainty will be captured in the
+% increased vairance of draws for predicted values. 
+
+% We can compare the smoothed, filtered C++ estimates with those from Matlab
+T = size(X_pred,1);
+xpNaN = 10*(X_pred-repmat(Res.Mx,T,1))./repmat(Res.Wx,T,1); 
+V_0 = long_run_var(Spec.A,Spec.Q);
+Z_0 = zeros(size(Spec.A,1),1);
+[Zsmooth_cpp, ~, ~, LogLik_cpp, ~] = runKF(xpNaN', Spec.A, Spec.HJ, Spec.Q, diag(Spec.R), Z_0, V_0);
+Zsmooth_cpp = Zsmooth_cpp(:,2:end)'; % drop pre-sample values
+
 figure('Name','Common Factors');
-h = plot(datesM,Res.Z(:,1:m));
+hold on
+plot(datesM,Res.Z(:,1));
+plot(datesM,Zsmooth_cpp(:,1));
 xlim(datesM([1 end])); datetick('x','yyyy','keeplimits');
+hold off
 pause(5); % to display plot
 
-Spec.colnames
+%% Plot projection of common factors onto the first series
 
-%plot(datesM,Res.Z(:,1)*Res.H(idxSeries,1),'k','LineWidth',1.5)
+% Data with which we fitted the model have long run trends removed. We'll
+% add these trends back in to plot our fitted estimates
 
+%Using a scatter plot for true observations is confusing, so well use a
+%line plot with any missing observations filled via cubic spline.
+plot_idx = 1; %Change this to plot a different series
+x_plot = spline_fill_centered(X_pred(:,plot_idx)) + Trend(:,plot_idx);
 
-%% Plot projection of common factor onto Payroll Employment and GDP.
-idxSeries = strcmp('PAYEMS',SeriesID); t_obs = ~isnan(X(:,idxSeries));
-figure('Name','Common Factor Projection');
-
-subplot(2,1,1); % projection of common factor onto PAYEMS
-CommonFactor = Res.X_sm(:,idxSeries);
-plot(Time,CommonFactor,'k'); hold on;
-plot(Time(t_obs),X(t_obs,idxSeries),'b'); box on;
-title(SeriesName{idxSeries}); xlim(Time([1 end])); datetick('x','yyyy','keeplimits');
-ylabel({Units{idxSeries}, UnitsTransformed{idxSeries}});
-legend('common component','data'); legend boxoff;
-
-subplot(2,1,2); % projection of common factor onto GDPC1
-idxSeries = strcmp('GDPC1',SeriesID); t_obs = ~isnan(X(:,idxSeries));
-CommonFactor = Res.X_sm(:,idxSeries);
-plot(Time,CommonFactor,'k'); hold on;
-plot(Time(t_obs), X(t_obs,idxSeries),'b'); box on;
-title(SeriesName{idxSeries}); xlim(Time([1 end])); datetick('x','yyyy','keeplimits');
-ylabel({Units{idxSeries},UnitsTransformed{idxSeries}});
-legend('common component','data'); legend boxoff;
-
-%% Get Nowcast Update for series 1 (example)
-
-
-
-new_vintage = '2016-12-23'; % vintage dataset to use for estimation
-new_datafile = fullfile('data',country,[new_vintage '.xls']);
-[X_new,Time_new,Z_new] = load_data(new_datafile,Spec,sample_start); 
-%X - transformed data
-%Time - time in Matlab format
-%Z - raw data
-
-%Make sure old and new data is the same size
-[N,k] = size(X_new);
-T_old = size(X,1); T = size(X_new,1);
-if T > T_old
-    X = [X; NaN(T-T_old,N)];
-end
-
-%Identify periods where old and new data are different due either to new
-%releases or revisions
-% is_different = @(x,y) any(x(isfinite(x))~=y(isfinite(x))) || any(~isfinite(x) & isfinite(y));
-% update_dates = false(T_new,1);
-
-Xs_old = (X-repmat(Res.Mx,T,1))./repmat(Res.Wx,T,1); %scaled version
-Xs_new = (X_new-repmat(Res.Mx,T,1))./repmat(Res.Wx,T,1); %scaled version
-
-% Updates in this version come directly from the Kalman Filter. I've 
-% updated SKF.m to include the gain times the innovation, using this
-% (element wise) multiplication to give the update each series contributes
-% to factors. At the end of the sample predictions plus updates will equal
-% factor values exactly, earlier dates may be slightly different due to
-% smoothing. 
-
-%Filter old data to get Kalman update
-UD_old = SKF(Xs_old', Res.A, Res.CJ, Res.Q, diag(Res.R), Res.Z_0, Res.V_0, Spec.r);  
-%Filter new data to get Kalman update
-UD_new = SKF(Xs_new', Res.A, Res.CJ, Res.Q, diag(Res.R), Res.Z_0, Res.V_0, Spec.r);
-
-%The news content is the difference in the updates at each period
-News = UD_new.UD - UD_old.UD; 
-
-%For GDP in particular
-series = 'GDPC1';
-i_series = find(strcmp(series,Spec.SeriesID)); %series index
-GDP_news = zeros(T,k);
-for t=1:T
-    GDP_news(t,:) = Res.Wx(i_series)*Res.CJ(i_series,:)*squeeze(News(:,:,t));
-end
-
-%Print Results for variables refference dated November 2016
-idx_date = '01-Nov-2016';
-idx = find(strcmp(cellstr(datestr(Time_new)), idx_date));
-is_news = GDP_news(idx,:)';
-news_idx = find(is_news ~= 0);
-
-fprintf('\n\n\n');
-
-try
-disp('Table 6: News Contribution to GDP');
-disp(array2table(is_news(news_idx),'RowNames', strrep(Spec.SeriesName(news_idx),' ','_')));
-fprintf('\n\n\n');
-catch
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+figure('Name', Spec.colnames{plot_idx});
+hold on
+plot(datesM,Res.X_sm(:,plot_idx) + Trend(:,plot_idx), 'r');
+plot(datesM,Res.X_upper(:,plot_idx) + Trend(:,plot_idx), '--r');
+plot(datesM,Res.X_lower(:,plot_idx) + Trend(:,plot_idx), '--r');
+plot(datesM,x_plot, 'b');
+xlim(datesM([1 end])); datetick('x','yyyy','keeplimits');
+hold off
+pause(5); % to display plot
 
 
 

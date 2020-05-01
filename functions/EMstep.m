@@ -46,28 +46,13 @@ function  [H_new, R_new, A_new, Q_new, loglik] = EMstep(Y, A, H, Q, R, p, frq, i
 %% Initialize preliminary values
 
 % Store series/model values
-[nobs, T] = size(Y);
+[k, T] = size(Y);
 [~,m] = size(H);
 sA = size(A,1); 
-sV = sA-nobs;
-pp = sV/m;
-ar_start = sV+1;
-
-%% Normalize
-chlky = chol(Q(1:m,1:m),'lower')/sqrt(10);
-scl = kron(eye(pp),eye(m)/chlky); 
-Iscl = kron(eye(pp),chlky);
-Q(1:m,1:m) = 10*eye(m); %due to normalization
-aa = scl*A(1:sV,1:sV)*Iscl;
-A(1:m,1:sV) = aa(1:m,1:sV);
-H = H*chlky;
+pp = sA/m;
 
 %Initial variance following Hamilton 1994
-xx = eye(sA^2) - kron(A,A);
-vQ = reshape(Q, (sA)^2, 1);
-V_0 = xx\vQ;
-V_0 = reshape(V_0,sA,sA); 
-V_0 = (V_0 + V_0')/2; %reduce rounding error
+V_0 = long_run_var(A,Q);
 
 Z_0 = zeros(sA,1);
 
@@ -78,7 +63,6 @@ Z_0 = zeros(sA,1);
 % effectively gives the previous iteration's log-likelihood
 % For more information on output, see runKF
 HJ =get_CJ(H, frq, isdiff, p); 
-HJ = [HJ, eye(nobs)];
 
 % A = Spec.A;
 % HJ = Spec.HJ;
@@ -89,6 +73,23 @@ HJ = [HJ, eye(nobs)];
 % Vsmooth gives the variance of contemporaneous factors
 % VVsmooth gives the covariance of factors at one lag for Watson Engle
 % adjustments
+
+%% Normalize
+% This normalization is particularly effective at preventing rounding
+% errors, but the specific normalization we use should not be that crucial
+if pp>1
+    head_z = fliplr(reshape(Zsmooth(:, 1), m, pp));
+    head_z = head_z(:,1:pp-1);
+    ZZsmooth = [head_z, Zsmooth(1:m,:)];
+end
+  iscl = ZZsmooth*ZZsmooth'/(T+pp);
+  iscl = (iscl+iscl')/2;
+  iscl = chol(iscl,  "lower");
+  scl = pinv(iscl); 
+  Scl = kron(eye(p), scl);
+  sscl = kron(eye(pp), scl);
+  
+  Zsmooth = sscl*Zsmooth;
 
 % Zsmooth(1:sA,:)*Zsmooth(1:sA,:)'/T
 
@@ -105,19 +106,19 @@ mp = m*p;
 
 % E[f_t*f_t' | Omega_T]
 EZZ = Zsmooth(1:mp, 2:end) * Zsmooth(1:mp, 2:end)'...
-    + sum(Vsmooth(1:mp, 1:mp, 2:end) ,3); % WE adjustment
+    + Scl*sum(Vsmooth(1:mp, 1:mp, 2:end) ,3)*Scl'; % WE adjustment
 
 EZZ = (EZZ + EZZ')/2;
 
 % E[f_{t-1}*f_{t-1}' | Omega_T]
 EZZ_BB = Zsmooth(1:mp, 1:end-1)*Zsmooth(1:mp, 1:end-1)'...
-        + sum(Vsmooth(1:mp, 1:mp, 1:end-1), 3); % WE adjustment
+        + Scl*sum(Vsmooth(1:mp, 1:mp, 1:end-1), 3)*Scl'; % WE adjustment
     
 EZZ_BB = (EZZ_BB + EZZ_BB')/2;
 
 % E[f_t*f_{t-1}' | Omega_T]
 EZZ_FB = Zsmooth(1:m, 2:end)*Zsmooth(1:mp, 1:end-1)'...
-    + sum(VVsmooth(1:m, 1:mp, :), 3); % WE adjustment
+    + scl*sum(VVsmooth(1:m, 1:mp, :), 3)*Scl'; % WE adjustment
 
 % Equation 6: Estimate VAR(p) for factor
 A_new(1:m,1:mp) = EZZ_FB/EZZ_BB; % VAR coeficients
@@ -126,29 +127,6 @@ A_new(1:m,1:mp) = EZZ_FB/EZZ_BB; % VAR coeficients
 q = (EZZ(1:m,1:m) - A_new(1:m,1:mp)* EZZ_FB') / T; %shortcut --- very clever (again)
 Q_new(1:m,1:m) =  (q + q')/2;
 
-%%% Update AR(1) components
-% Below 3 estimate the idiosyncratic component (for eqns 6, 8 BM 2010)
-% Just a bunch of AR(1) regressions
-
-% E[f_t*f_t' | \Omega_T]
-EZZ = diag(diag(Zsmooth(ar_start:end, 2:end) * Zsmooth(ar_start:end, 2:end)'))...
-    + diag(diag(sum(Vsmooth(ar_start:end, ar_start:end, 2:end), 3)));
-
-% E[f_{t-1}*f_{t-1}' | \Omega_T]
-EZZ_BB = diag(diag(Zsmooth(ar_start:end, 1:end-1)* Zsmooth(ar_start:end, 1:end-1)'))...
-       + diag(diag(sum(Vsmooth(ar_start:end, ar_start:end, 1:end-1), 3)));
-
-% E[f_t*f_{t-1}' | \Omega_T]
-EZZ_FB = diag(diag(Zsmooth(ar_start:end, 2:end)*Zsmooth(ar_start:end, 1:end-1)'))...
-       + diag(diag(sum(VVsmooth(ar_start:end, ar_start:end, :), 3)));
-
-A_new(ar_start:end, ar_start:end) = EZZ_FB * diag(1./diag((EZZ_BB)));  % Equation 6
-Q_new(ar_start:end, ar_start:end) = (EZZ - A_new(ar_start:end, ar_start:end)*EZZ_FB') / T;           % Equation 8
-
-% Z_0 = Zsmooth(:,1); %zeros(size(Zsmooth,1),1); %update initial condition
-% V_0 = squeeze(Vsmooth(:,:,1));
-
-
 %% 3 MAXIMIZATION STEP (observation equation)
 
 %%% INITIALIZATION AND SETUP ----------------------------------------------
@@ -156,9 +134,9 @@ Q_new(ar_start:end, ar_start:end) = (EZZ - A_new(ar_start:end, ar_start:end)*EZZ
 % LOADINGS
 H_new = H;
 
-for j = 1:nobs % Loop through observables
+for j = 1:k % Loop through observables
     fq = frq(j);
-    y = Y(j,:) - Zsmooth(sV+j,2:end);
+    y = Y(j,:);
     y_idx = ~isnan(y);
     y_obs = y(y_idx);
     if fq==1
@@ -166,16 +144,16 @@ for j = 1:nobs % Loop through observables
         Z_obs = Z_obs(:,y_idx); %Z_obs where y observed
         V_obs = sum(Vsmooth(1:m,1:m,logical([0,y_idx])),3); %Vsmooth where y observed
     else
-        J = helper_mat(fq,isdiff(j),m,sV);
-        Z_obs = J*Zsmooth(1:sV,2:end);
+        J = helper_mat(fq,isdiff(j),m,sA);
+        Z_obs = J*Zsmooth(1:sA,2:end);
         Z_obs = Z_obs(:,y_idx);
-        V_obs = J*sum(Vsmooth(1:sV,1:sV,logical([0,y_idx])),3)*J';
+        V_obs = J*sum(Vsmooth(1:sA,1:sA,logical([0,y_idx])),3)*J';
     end
-    V_ar = sum(Vsmooth(sV+j,sV+j,logical([0,y_idx])),3); %WE adjustment for AR(1) error term
+    V_obs = scl*V_obs*scl';
     EZZ = Z_obs*Z_obs' + V_obs;
     EZZ = (EZZ + EZZ')/2;
     H_new(j,:) = (y_obs*Z_obs')/ EZZ;
-    R(j) = (sum((y_obs-H_new(j,:)*Z_obs).^2)+ H_new(j,:)*V_obs*H_new(j,:)' + V_ar)/size(y_obs,2);
+    R(j) = (sum((y_obs-H_new(j,:)*Z_obs).^2)+ H_new(j,:)*V_obs*H_new(j,:)')/size(y_obs,2);
 end
 R_new = R;
 

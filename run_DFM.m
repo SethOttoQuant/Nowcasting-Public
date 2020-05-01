@@ -48,7 +48,7 @@ opts.DataLines = 1;
 opts.VariableTypes = 'double';
 X = readmatrix('estimation_data_no_outliers.csv', opts);
 X_pred = readmatrix('prediction_data_with_outliers.csv', opts);
-Trend = readmatrix('low_frq_trends.csv', opts);
+Trend = readmatrix('low_frequency_trends.csv', opts);
 dates = table2array(readtable('dates.csv'));
 datesM = datenum(dates); %dates in Matlab format
 

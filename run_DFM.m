@@ -46,7 +46,7 @@ X = table2array(Xtable(:,2:end));
 Xptable = readtable('prediction_data_with_outliers.csv','TreatAsEmpty',{'.','NA'});
 X_pred = table2array(Xptable(:,2:end));
 Ttable = readtable('low_frequency_trends.csv','TreatAsEmpty',{'.','NA'});
-Trend = table2array(Ttable);
+Trend = table2array(Ttable(:,2:end));
 dates = table2array(readtable('dates.csv'));
 datesM = datenum(dates); %dates in Matlab format
 
@@ -106,8 +106,8 @@ Zsmooth_cpp = Zsmooth_cpp(:,2:end)'; % drop pre-sample values
 
 figure('Name','Common Factors');
 hold on
-plot(datesM,Res.Z(:,1));
-plot(datesM,Zsmooth_cpp(:,1));
+plot(datesM,Res.Z(:,1:m));
+plot(datesM,Zsmooth_cpp(:,1:m));
 xlim(datesM([1 end])); datetick('x','yyyy','keeplimits');
 hold off
 pause(5); % to display plot
@@ -119,7 +119,7 @@ pause(5); % to display plot
 
 %Using a scatter plot for true observations is confusing, so well use a
 %line plot with any missing observations filled via cubic spline.
-plot_idx = 7; %Change this to plot a different series
+plot_idx = 1; %Change this to plot a different series
 x_plot = spline_fill_plot(X_pred(:,plot_idx)) + Trend(:,plot_idx);
 
 figure('Name', Spec.colnames{plot_idx});

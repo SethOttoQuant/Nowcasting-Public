@@ -41,14 +41,12 @@ Spec = jsondecode(fileread(fname));
 % made with data that includes outliers; it is then up to the data
 % scientist how to treat extreme values
 
-% If the first row does not have any observations Matlab drops it. We need 
-% prevent this behavior so that rows correspond to dates.
-opts = delimitedTextImportOptions;
-opts.DataLines = 1;
-opts.VariableTypes = 'double';
-X = readmatrix('estimation_data_no_outliers.csv', opts);
-X_pred = readmatrix('prediction_data_with_outliers.csv', opts);
-Trend = readmatrix('low_frequency_trends.csv', opts);
+Xtable = readtable('estimation_data_no_outliers.csv','TreatAsEmpty',{'.','NA'});
+X = table2array(Xtable(:,2:end));
+Xptable = readtable('prediction_data_with_outliers.csv','TreatAsEmpty',{'.','NA'});
+X_pred = table2array(Xptable(:,2:end));
+Ttable = readtable('low_frequency_trends.csv','TreatAsEmpty',{'.','NA'});
+Trend = table2array(Ttable);
 dates = table2array(readtable('dates.csv'));
 datesM = datenum(dates); %dates in Matlab format
 
@@ -121,7 +119,7 @@ pause(5); % to display plot
 
 %Using a scatter plot for true observations is confusing, so well use a
 %line plot with any missing observations filled via cubic spline.
-plot_idx = 1; %Change this to plot a different series
+plot_idx = 7; %Change this to plot a different series
 x_plot = spline_fill_plot(X_pred(:,plot_idx)) + Trend(:,plot_idx);
 
 figure('Name', Spec.colnames{plot_idx});
